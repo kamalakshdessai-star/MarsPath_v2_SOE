@@ -1,0 +1,2404 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MarsPath — Surface mobility planning for crewed Mars exploration (on foot or by rover)">
+  <title>MarsPath — Mars Surface Mobility Planner</title>
+
+  <!-- Leaflet.js 1.9.4 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Chart.js 4.4.0 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Font Awesome 6.5.1 (Fixed SRI) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <!-- Google Fonts: Orbitron + Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <style>
+    /* ===== CSS Custom Properties ===== */
+    :root {
+      --color-bg-primary: #0a0a0f;
+      --color-bg-secondary: #12121a;
+      --color-bg-tertiary: #1a1a28;
+      --color-bg-panel: rgba(14, 14, 22, 0.92);
+      --color-bg-card: rgba(26, 26, 40, 0.85);
+      --color-accent: #E53935;
+      --color-accent-glow: rgba(229, 57, 53, 0.35);
+      --color-accent-dim: rgba(229, 57, 53, 0.15);
+      --color-success: #00E676;
+      --color-warning: #FFD600;
+      --color-danger: #FF1744;
+      --color-info: #40C4FF;
+      --color-text-primary: #E0E0E0;
+      --color-text-secondary: #9E9E9E;
+      --color-text-muted: #616161;
+      --color-border: rgba(255, 255, 255, 0.07);
+      --color-border-accent: rgba(229, 57, 53, 0.3);
+      --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --navbar-height: 52px;
+      --statusbar-height: 32px;
+      --sidebar-width: 320px;
+      --right-panel-width: 350px;
+      --transition-speed: 0.25s;
+      --border-radius: 6px;
+    }
+
+    /* ===== Reset & Base ===== */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--color-text-primary);
+      background: var(--color-bg-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(229, 57, 53, 0.3);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(229, 57, 53, 0.5);
+    }
+
+    /* ===== Scan-line overlay (subtle CRT effect) ===== */
+    #app-container::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9000;
+      background: repeating-linear-gradient(0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.03) 2px,
+          rgba(0, 0, 0, 0.03) 4px);
+    }
+
+    /* ===== App Container ===== */
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      position: relative;
+    }
+
+    /* ========================================================
+       TOP NAVIGATION BAR
+       ======================================================== */
+    #navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--navbar-height);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: rgba(10, 10, 15, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--color-border);
+      z-index: 1000;
+      gap: 12px;
+    }
+
+    /* Logo */
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 2px;
+      color: var(--color-accent);
+      white-space: nowrap;
+      text-shadow: 0 0 20px var(--color-accent-glow);
+      user-select: none;
+    }
+
+    .nav-logo .logo-icon {
+      font-size: 18px;
+      animation: pulse-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+
+      0%,
+      100% {
+        filter: brightness(1);
+      }
+
+      50% {
+        filter: brightness(1.4) drop-shadow(0 0 6px var(--color-accent));
+      }
+    }
+
+    /* Mission Info */
+    .nav-mission-info {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-family: var(--font-heading);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+
+    .nav-mission-info .separator {
+      color: var(--color-text-muted);
+    }
+
+    .mission-time {
+      color: var(--color-info);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Status Indicators */
+    .nav-status-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .status-indicator i {
+      font-size: 10px;
+    }
+
+    .status-indicator .status-value {
+      font-family: var(--font-heading);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .status-indicator[data-status="good"] {
+      border-color: rgba(0, 230, 118, 0.25);
+    }
+
+    .status-indicator[data-status="good"] .status-value {
+      color: var(--color-success);
+    }
+
+    .status-indicator[data-status="warning"] {
+      border-color: rgba(255, 214, 0, 0.25);
+    }
+
+    .status-indicator[data-status="warning"] .status-value {
+      color: var(--color-warning);
+    }
+
+    .status-indicator[data-status="critical"] {
+      border-color: rgba(255, 23, 68, 0.25);
+    }
+
+    .status-indicator[data-status="critical"] .status-value {
+      color: var(--color-danger);
+    }
+
+    /* Nav Actions */
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 12px;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      color: var(--color-text-secondary);
+      font-family: var(--font-heading);
+      font-size: 9px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .nav-btn:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+      background: var(--color-accent-dim);
+    }
+
+    .nav-btn.active {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+      background: var(--color-accent-dim);
+      box-shadow: 0 0 12px var(--color-accent-glow);
+    }
+
+    .nav-btn i {
+      font-size: 12px;
+    }
+
+    /* ========================================================
+       MAIN CONTENT AREA (below navbar, above status bar)
+       ======================================================== */
+    #main-content {
+      display: flex;
+      flex: 1;
+      margin-top: var(--navbar-height);
+      margin-bottom: var(--statusbar-height);
+      height: calc(100vh - var(--navbar-height) - var(--statusbar-height));
+      position: relative;
+    }
+
+    /* ========================================================
+       LEFT SIDEBAR
+       ======================================================== */
+    #left-sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--color-bg-panel);
+      border-right: 1px solid var(--color-border);
+      transition: margin-left var(--transition-speed) ease, opacity var(--transition-speed) ease;
+      z-index: 500;
+      overflow: hidden;
+    }
+
+    #left-sidebar.collapsed {
+      margin-left: calc(-1 * var(--sidebar-width));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Sidebar Toggle Button */
+    .sidebar-toggle {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-border);
+      border-left: none;
+      border-radius: 0 4px 4px 0;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      z-index: 501;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .sidebar-toggle:hover {
+      color: var(--color-accent);
+      border-color: var(--color-border-accent);
+    }
+
+    #left-sidebar-toggle {
+      left: var(--sidebar-width);
+    }
+
+    #left-sidebar.collapsed~#left-sidebar-toggle {
+      left: 0;
+    }
+
+    #right-panel-toggle {
+      right: var(--right-panel-width);
+    }
+
+    #right-panel.collapsed~#right-panel-toggle {
+      right: 0;
+    }
+
+    /* Sidebar Tab Bar */
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--color-border);
+      background: rgba(0, 0, 0, 0.3);
+      flex-shrink: 0;
+    }
+
+    .panel-tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 10px 4px 8px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--color-text-muted);
+      font-family: var(--font-heading);
+      font-size: 8px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .panel-tab i {
+      font-size: 14px;
+    }
+
+    .panel-tab:hover {
+      color: var(--color-text-secondary);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .panel-tab.active {
+      color: var(--color-accent);
+      border-bottom-color: var(--color-accent);
+      background: rgba(229, 57, 53, 0.05);
+    }
+
+    /* Panel Content */
+    .panel-content {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .panel-content.active {
+      display: flex;
+    }
+
+    /* Panel Section */
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel-section-title {
+      font-family: var(--font-heading);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    /* Layer Toggle Switches */
+    .layer-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .layer-toggle:hover {
+      border-color: var(--color-border-accent);
+      background: rgba(229, 57, 53, 0.05);
+    }
+
+    .layer-toggle.active {
+      border-color: var(--color-accent);
+      background: var(--color-accent-dim);
+    }
+
+    .layer-toggle-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .layer-color-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .layer-toggle-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-text-primary);
+    }
+
+    .layer-toggle-sub {
+      font-size: 10px;
+      color: var(--color-text-muted);
+    }
+
+    /* Toggle Switch UI */
+    .toggle-switch {
+      position: relative;
+      width: 34px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--color-bg-tertiary);
+      border: 1px solid var(--color-border);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      background: var(--color-text-muted);
+      border-radius: 50%;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .toggle-switch input:checked+.toggle-slider {
+      background: var(--color-accent-dim);
+      border-color: var(--color-accent);
+    }
+
+    .toggle-switch input:checked+.toggle-slider::before {
+      transform: translateX(16px);
+      background: var(--color-accent);
+      box-shadow: 0 0 6px var(--color-accent-glow);
+    }
+
+    /* Waypoint Item */
+    .waypoint-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .waypoint-item:hover {
+      border-color: var(--color-border-accent);
+    }
+
+    .waypoint-item.active {
+      border-color: var(--color-accent);
+    }
+
+    .waypoint-marker {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-accent-dim);
+      border: 1px solid var(--color-accent);
+      border-radius: 50%;
+      font-family: var(--font-heading);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-accent);
+      flex-shrink: 0;
+    }
+
+    .waypoint-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .waypoint-name {
+      font-weight: 600;
+      font-size: 12px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .waypoint-coords {
+      font-size: 10px;
+      color: var(--color-text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .waypoint-distance {
+      font-family: var(--font-heading);
+      font-size: 10px;
+      color: var(--color-info);
+      white-space: nowrap;
+    }
+
+    .waypoint-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .waypoint-actions button {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      font-size: 10px;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .waypoint-actions button:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    /* Objective Checklist */
+    .objective-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .objective-item:last-child {
+      border-bottom: none;
+    }
+
+    .objective-check {
+      width: 16px;
+      height: 16px;
+      margin-top: 1px;
+      accent-color: var(--color-accent);
+      cursor: pointer;
+    }
+
+    .objective-text {
+      font-size: 12px;
+      color: var(--color-text-primary);
+      line-height: 1.4;
+    }
+
+    .objective-text.completed {
+      text-decoration: line-through;
+      color: var(--color-text-muted);
+    }
+
+    .objective-priority {
+      font-family: var(--font-heading);
+      font-size: 8px;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .priority-high {
+      background: rgba(255, 23, 68, 0.15);
+      color: var(--color-danger);
+    }
+
+    .priority-medium {
+      background: rgba(255, 214, 0, 0.15);
+      color: var(--color-warning);
+    }
+
+    .priority-low {
+      background: rgba(0, 230, 118, 0.15);
+      color: var(--color-success);
+    }
+
+    /* Crew Card */
+    .crew-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+    }
+
+    .crew-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--color-bg-tertiary);
+      border: 2px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .crew-info {
+      flex: 1;
+    }
+
+    .crew-name {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .crew-role {
+      font-size: 10px;
+      color: var(--color-text-muted);
+    }
+
+    .crew-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .crew-status-dot.online {
+      background: var(--color-success);
+      box-shadow: 0 0 6px rgba(0, 230, 118, 0.5);
+    }
+
+    .crew-status-dot.offline {
+      background: var(--color-text-muted);
+    }
+
+    /* Route Controls */
+    .route-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .route-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      color: var(--color-text-secondary);
+      font-family: var(--font-heading);
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .route-btn:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .route-btn.primary {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: #fff;
+    }
+
+    .route-btn.primary:hover {
+      background: #c62828;
+    }
+
+    /* Elevation Profile Container */
+    .elevation-profile-container {
+      height: 140px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      padding: 8px;
+    }
+
+    /* Science Target Card */
+    .science-target {
+      padding: 10px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      transition: all var(--transition-speed) ease;
+      cursor: pointer;
+    }
+
+    .science-target:hover {
+      border-color: var(--color-border-accent);
+    }
+
+    .science-target-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .science-target-name {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .science-tag {
+      font-family: var(--font-heading);
+      font-size: 8px;
+      letter-spacing: 1px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: var(--color-accent-dim);
+      color: var(--color-accent);
+    }
+
+    .science-target-desc {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+      line-height: 1.4;
+    }
+
+    /* Sample Log Entry */
+    .sample-entry {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+    }
+
+    .sample-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-accent-dim);
+      border-radius: var(--border-radius);
+      color: var(--color-accent);
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .sample-info {
+      flex: 1;
+    }
+
+    .sample-id {
+      font-family: var(--font-heading);
+      font-size: 10px;
+      color: var(--color-info);
+      letter-spacing: 0.5px;
+    }
+
+    .sample-type {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+    }
+
+    /* ========================================================
+       MAP CONTAINER
+       ======================================================== */
+    #map-container {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+    }
+
+    #mars-map {
+      width: 100%;
+      height: 100%;
+      background: #0d0d0d;
+      z-index: 1;
+    }
+
+    /* Leaflet overrides */
+    .leaflet-control-zoom a {
+      background: var(--color-bg-panel) !important;
+      color: var(--color-text-secondary) !important;
+      border-color: var(--color-border) !important;
+      font-family: var(--font-heading) !important;
+      width: 30px !important;
+      height: 30px !important;
+      line-height: 30px !important;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: var(--color-bg-tertiary) !important;
+      color: var(--color-accent) !important;
+      border-color: var(--color-border-accent) !important;
+    }
+
+    .leaflet-bar {
+      border: none !important;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    /* Coordinate Display on Map */
+    .map-coords-display {
+      position: absolute;
+      bottom: 44px;
+      left: 12px;
+      padding: 6px 12px;
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      font-family: var(--font-heading);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      color: var(--color-text-secondary);
+      z-index: 450;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      backdrop-filter: blur(8px);
+    }
+
+    .map-coords-display .coord-label {
+      color: var(--color-text-muted);
+      font-size: 8px;
+      margin-right: 4px;
+    }
+
+    .map-coords-display .coord-value {
+      color: var(--color-info);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Mini-Map */
+    .mini-map-container {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      width: 150px;
+      height: 120px;
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      overflow: hidden;
+      z-index: 450;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .mini-map-container .mini-map-header {
+      font-family: var(--font-heading);
+      font-size: 7px;
+      letter-spacing: 1.5px;
+      color: var(--color-text-muted);
+      text-align: center;
+      padding: 3px;
+      background: rgba(0, 0, 0, 0.4);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    #mini-map {
+      width: 100%;
+      height: calc(100% - 18px);
+    }
+
+    /* Map Scale */
+    .leaflet-control-scale-line {
+      background: var(--color-bg-panel) !important;
+      border-color: var(--color-accent) !important;
+      color: var(--color-text-secondary) !important;
+      font-family: var(--font-heading) !important;
+      font-size: 9px !important;
+      letter-spacing: 1px !important;
+    }
+
+    /* Map toolbar */
+    .map-toolbar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--color-bg-panel);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      z-index: 450;
+      backdrop-filter: blur(8px);
+    }
+
+    .map-tool-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all var(--transition-speed) ease;
+    }
+
+    .map-tool-btn:hover {
+      color: var(--color-text-primary);
+      background: var(--color-bg-tertiary);
+      border-color: var(--color-border);
+    }
+
+    .map-tool-btn.active {
+      color: var(--color-accent);
+      background: var(--color-accent-dim);
+      border-color: var(--color-accent);
+    }
+
+    .map-tool-btn[title]::after {
+      display: none;
+    }
+
+    /* ========================================================
+       RIGHT INFO PANEL
+       ======================================================== */
+    #right-panel {
+      width: var(--right-panel-width);
+      min-width: var(--right-panel-width);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--color-bg-panel);
+      border-left: 1px solid var(--color-border);
+      overflow-y: auto;
+      transition: margin-right var(--transition-speed) ease, opacity var(--transition-speed) ease;
+      z-index: 500;
+    }
+
+    #right-panel.collapsed {
+      margin-right: calc(-1 * var(--right-panel-width));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .right-panel-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .right-panel-section:last-child {
+      border-bottom: none;
+    }
+
+    .right-panel-title {
+      font-family: var(--font-heading);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .right-panel-title i {
+      color: var(--color-accent);
+      font-size: 11px;
+    }
+
+    /* Metric Cards */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .metric-card {
+      padding: 10px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      text-align: center;
+    }
+
+    .metric-card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .metric-label {
+      font-family: var(--font-heading);
+      font-size: 8px;
+      letter-spacing: 1.5px;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-value.small {
+      font-size: 14px;
+    }
+
+    .metric-unit {
+      font-size: 9px;
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+
+    .metric-value.success {
+      color: var(--color-success);
+    }
+
+    .metric-value.warning {
+      color: var(--color-warning);
+    }
+
+    .metric-value.danger {
+      color: var(--color-danger);
+    }
+
+    .metric-value.info {
+      color: var(--color-info);
+    }
+
+    .metric-trend {
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .metric-trend.up {
+      color: var(--color-danger);
+    }
+
+    .metric-trend.down {
+      color: var(--color-success);
+    }
+
+    .metric-trend.stable {
+      color: var(--color-text-muted);
+    }
+
+    /* Radiation Bar */
+    .radiation-bar-container {
+      margin-top: 8px;
+    }
+
+    .radiation-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: var(--color-bg-tertiary);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+    }
+
+    .radiation-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+      background: linear-gradient(90deg, var(--color-success), var(--color-warning), var(--color-danger));
+    }
+
+    .radiation-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 4px;
+      font-size: 9px;
+      color: var(--color-text-muted);
+    }
+
+    /* Elevation chart (right panel) */
+    .right-chart-container {
+      height: 120px;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--border-radius);
+      padding: 8px;
+    }
+
+    /* Terrain Info List */
+    .terrain-info-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .terrain-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .terrain-info-row:last-child {
+      border-bottom: none;
+    }
+
+    .terrain-info-key {
+      font-size: 11px;
+      color: var(--color-text-secondary);
+    }
+
+    .terrain-info-val {
+      font-family: var(--font-heading);
+      font-size: 11px;
+      color: var(--color-text-primary);
+    }
+
+    /* ========================================================
+       BOTTOM STATUS BAR
+       ======================================================== */
+    #status-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--statusbar-height);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: rgba(8, 8, 14, 0.92);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--color-border);
+      z-index: 1000;
+      font-family: var(--font-heading);
+      font-size: 9px;
+      letter-spacing: 1px;
+      color: var(--color-text-muted);
+    }
+
+    .status-bar-group {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .status-bar-item i {
+      font-size: 10px;
+    }
+
+    .status-bar-value {
+      color: var(--color-text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .status-bar-item .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .status-dot.connected {
+      background: var(--color-success);
+      box-shadow: 0 0 6px rgba(0, 230, 118, 0.5);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .status-dot.disconnected {
+      background: var(--color-danger);
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* ========================================================
+       HUD OVERLAY
+       ======================================================== */
+    #hud-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 8000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    #hud-overlay.active {
+      opacity: 1;
+    }
+
+    /* Visor frame */
+    .hud-visor-frame {
+      position: absolute;
+      inset: 20px;
+      border: 2px solid rgba(229, 57, 53, 0.3);
+      border-radius: 40px;
+      box-shadow:
+        inset 0 0 80px rgba(229, 57, 53, 0.05),
+        0 0 40px rgba(229, 57, 53, 0.05);
+      overflow: hidden;
+    }
+
+    /* Scan lines on HUD */
+    .hud-scanlines {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg,
+          transparent,
+          transparent 3px,
+          rgba(229, 57, 53, 0.015) 3px,
+          rgba(229, 57, 53, 0.015) 6px);
+      animation: hud-scan 8s linear infinite;
+    }
+
+    @keyframes hud-scan {
+      0% {
+        background-position: 0 0;
+      }
+
+      100% {
+        background-position: 0 600px;
+      }
+    }
+
+    /* HUD Elements */
+    .hud-element {
+      position: absolute;
+      font-family: var(--font-heading);
+      color: rgba(229, 57, 53, 0.7);
+      text-shadow: 0 0 10px var(--color-accent-glow);
+    }
+
+    .hud-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .hud-metric-label {
+      font-size: 8px;
+      letter-spacing: 2px;
+      opacity: 0.6;
+    }
+
+    .hud-metric-value {
+      font-size: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* HUD Compass - top center */
+    .hud-compass {
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .hud-compass-strip {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 12px;
+      letter-spacing: 3px;
+    }
+
+    .hud-compass-heading {
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .hud-compass-cardinal {
+      opacity: 0.4;
+    }
+
+    /* HUD Elevation - left center */
+    .hud-elevation {
+      left: 50px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    /* HUD O2 - top left */
+    .hud-o2 {
+      top: 80px;
+      left: 50px;
+    }
+
+    /* HUD Battery - top right */
+    .hud-battery {
+      top: 80px;
+      right: 50px;
+    }
+
+    /* HUD Speed - bottom left */
+    .hud-speed {
+      bottom: 80px;
+      left: 50px;
+    }
+
+    /* HUD Target - right center */
+    .hud-target-info {
+      right: 50px;
+      top: 50%;
+      transform: translateY(-50%);
+      text-align: right;
+    }
+
+    /* HUD Warning Banner */
+    .hud-warning {
+      bottom: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 20px;
+      background: rgba(255, 23, 68, 0.15);
+      border: 1px solid rgba(255, 23, 68, 0.4);
+      border-radius: 4px;
+      color: var(--color-danger);
+      font-size: 11px;
+      letter-spacing: 2px;
+    }
+
+    .hud-warning.visible {
+      display: flex;
+      animation: hud-flash 1s ease-in-out infinite;
+    }
+
+    @keyframes hud-flash {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.6;
+      }
+    }
+
+    /* HUD crosshair center */
+    .hud-crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+    }
+
+    .hud-crosshair::before,
+    .hud-crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(229, 57, 53, 0.3);
+    }
+
+    .hud-crosshair::before {
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      transform: translateY(-50%);
+    }
+
+    .hud-crosshair::after {
+      left: 50%;
+      top: 0;
+      width: 1px;
+      height: 100%;
+      transform: translateX(-50%);
+    }
+
+    /* HUD Waypoint markers */
+    .hud-waypoint-marker {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-family: var(--font-heading);
+      color: rgba(64, 196, 255, 0.7);
+    }
+
+    .hud-waypoint-marker .wp-diamond {
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid rgba(64, 196, 255, 0.7);
+      transform: rotate(45deg);
+    }
+
+    .hud-waypoint-marker .wp-label {
+      font-size: 8px;
+      letter-spacing: 1px;
+    }
+
+    .hud-waypoint-marker .wp-dist {
+      font-size: 10px;
+    }
+
+    /* ===== Utility / Helper Classes ===== */
+    .text-accent {
+      color: var(--color-accent);
+    }
+
+    .text-success {
+      color: var(--color-success);
+    }
+
+    .text-warning {
+      color: var(--color-warning);
+    }
+
+    .text-danger {
+      color: var(--color-danger);
+    }
+
+    .text-info {
+      color: var(--color-info);
+    }
+
+    .text-muted {
+      color: var(--color-text-muted);
+    }
+
+    .font-heading {
+      font-family: var(--font-heading);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+  </style>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+
+<body>
+
+  <!-- ============================================================
+       APP CONTAINER
+       ============================================================ -->
+  <div id="app-container">
+
+    <!-- ============================================================
+         TOP NAVIGATION BAR
+         ============================================================ -->
+    <nav id="navbar" role="navigation" aria-label="Main navigation">
+      <!-- Logo -->
+      <div class="nav-logo">
+        <span class="logo-icon">🔴</span>
+        <span>MARSPATH</span>
+      </div>
+
+      <!-- Mission Info -->
+      <div class="nav-mission-info">
+        <span data-field="mission-name">GALE CRATER EXPEDITION</span>
+        <span class="separator">|</span>
+        <span data-field="sol-count">SOL 1</span>
+        <span class="separator">|</span>
+        <span>MISSION TIME: <span class="mission-time" id="mission-clock" data-field="mission-time">00:00:00</span>
+          MST</span>
+      </div>
+
+      <!-- Status Indicators -->
+      <div class="nav-status-group" aria-label="System status">
+        <div class="status-indicator" data-status="good" data-metric="comm-link" title="Communication Link Status">
+          <i class="fa-solid fa-satellite-dish"></i>
+          <span>COMM LINK</span>
+          <span class="status-value" id="comm-status">Active</span>
+        </div>
+      </div>
+
+      <!-- Nav Actions -->
+      <div class="nav-actions">
+        <button class="nav-btn" id="hud-toggle-btn" title="Toggle HUD Overlay" aria-pressed="false">
+          <i class="fa-solid fa-vr-cardboard"></i>
+          <span>HUD</span>
+        </button>
+        <button class="nav-btn" id="settings-btn" title="Settings">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ============================================================
+         MAIN CONTENT AREA
+         ============================================================ -->
+    <main id="main-content">
+
+      <!-- ==========================================================
+           LEFT SIDEBAR
+           ========================================================== -->
+      <aside id="left-sidebar" role="complementary" aria-label="Mission panels">
+        <!-- Tab Bar -->
+        <div class="sidebar-tabs" role="tablist" aria-label="Sidebar tabs">
+          <button class="panel-tab active" role="tab" aria-selected="true" aria-controls="panel-mission"
+            data-panel="mission" id="tab-mission">
+            <i class="fa-solid fa-rocket"></i>
+            MISSION
+          </button>
+          <button class="panel-tab" role="tab" aria-selected="false" aria-controls="panel-layers" data-panel="layers"
+            id="tab-layers">
+            <i class="fa-solid fa-layer-group"></i>
+            LAYERS
+          </button>
+          <button class="panel-tab" role="tab" aria-selected="false" aria-controls="panel-route" data-panel="route"
+            id="tab-route">
+            <i class="fa-solid fa-route"></i>
+            ROUTE
+          </button>
+          <button class="panel-tab" role="tab" aria-selected="false" aria-controls="panel-science" data-panel="science"
+            id="tab-science">
+            <i class="fa-solid fa-flask"></i>
+            SCIENCE
+          </button>
+        </div>
+
+        <!-- ======== MISSION PANEL ======== -->
+        <div class="panel-content active" id="panel-mission" role="tabpanel" aria-labelledby="tab-mission">
+          <!-- Mission Name -->
+          <div class="panel-section">
+            <div class="panel-section-title">Mission Designation</div>
+            <div
+              style="padding: 10px; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius);">
+              <div
+                style="font-family: var(--font-heading); font-size: 13px; font-weight: 700; color: var(--color-accent); letter-spacing: 1px; margin-bottom: 4px;"
+                id="mission-designation">
+                MARSPATH EXPEDITION-1
+              </div>
+              <div style="font-size: 11px; color: var(--color-text-secondary);" id="mission-subtitle">
+                Gale Crater — Aeolis Mons foothills traverse planning
+              </div>
+              <div style="font-size: 10px; color: var(--color-text-muted); margin-top: 4px;">
+                Start: <span class="text-info">chosen by you on the ROUTE tab</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Objectives -->
+          <div class="panel-section">
+            <div class="panel-section-title">Objectives</div>
+            <div id="objectives-list">
+              <div class="objective-item" data-objective="obj-1">
+                <input type="checkbox" class="objective-check" id="obj-1" checked>
+                <label class="objective-text completed" for="obj-1">Complete pre-EVA suit diagnostics</label>
+                <span class="objective-priority priority-high">HIGH</span>
+              </div>
+              <div class="objective-item" data-objective="obj-2">
+                <input type="checkbox" class="objective-check" id="obj-2">
+                <label class="objective-text" for="obj-2">Traverse to Waypoint Alpha — sedimentary outcrop</label>
+                <span class="objective-priority priority-high">HIGH</span>
+              </div>
+              <div class="objective-item" data-objective="obj-3">
+                <input type="checkbox" class="objective-check" id="obj-3">
+                <label class="objective-text" for="obj-3">Collect rock core samples at designated POIs</label>
+                <span class="objective-priority priority-medium">MED</span>
+              </div>
+              <div class="objective-item" data-objective="obj-4">
+                <input type="checkbox" class="objective-check" id="obj-4">
+                <label class="objective-text" for="obj-4">Deploy seismic sensor array at Grid E-7</label>
+                <span class="objective-priority priority-medium">MED</span>
+              </div>
+              <div class="objective-item" data-objective="obj-5">
+                <input type="checkbox" class="objective-check" id="obj-5">
+                <label class="objective-text" for="obj-5">Document terrain for photogrammetry analysis</label>
+                <span class="objective-priority priority-low">LOW</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Crew -->
+          <div class="panel-section">
+            <div class="panel-section-title">Crew (hypothetical)</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="crew-card" data-crew="cmdr-chen">
+                <div class="crew-avatar">👩‍🚀</div>
+                <div class="crew-info">
+                  <div class="crew-name">Cmdr. L. Chen</div>
+                  <div class="crew-role">EVA Lead / Geologist</div>
+                </div>
+                <div class="crew-status-dot online" title="Online"></div>
+              </div>
+              <div class="crew-card" data-crew="dr-okafor">
+                <div class="crew-avatar">👨‍🚀</div>
+                <div class="crew-info">
+                  <div class="crew-name">Dr. A. Okafor</div>
+                  <div class="crew-role">Astrobiologist</div>
+                </div>
+                <div class="crew-status-dot online" title="Online"></div>
+              </div>
+              <div class="crew-card" data-crew="eng-vasquez">
+                <div class="crew-avatar">👩‍🚀</div>
+                <div class="crew-info">
+                  <div class="crew-name">Eng. M. Vasquez</div>
+                  <div class="crew-role">Systems / CapCom</div>
+                </div>
+                <div class="crew-status-dot online" title="Online"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======== LAYERS PANEL ======== -->
+        <div class="panel-content" id="panel-layers" role="tabpanel" aria-labelledby="tab-layers">
+          <div class="panel-section">
+            <div class="panel-section-title">Data Layers</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;" id="layer-toggles">
+
+              <div class="layer-toggle active" data-layer="optical">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #8D6E63;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Optical Imagery</div>
+                    <div class="layer-toggle-sub">CTX / HiRISE</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" checked data-layer-id="optical">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="topographic">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #42A5F5;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Topographic / Elevation</div>
+                    <div class="layer-toggle-sub">MOLA DEM</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="topographic">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="thermal">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #FF7043;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Thermal</div>
+                    <div class="layer-toggle-sub">THEMIS Day / Night</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="thermal">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="mineral">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #AB47BC;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Mineral Composition</div>
+                    <div class="layer-toggle-sub">CRISM Spectral</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="mineral">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="slope">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #26A69A;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Slope Gradient</div>
+                    <div class="layer-toggle-sub">Derived from MOLA</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="slope">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="radiation">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #FFEE58;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Radiation Zones</div>
+                    <div class="layer-toggle-sub">RAD Dosimetry</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="radiation">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="hazard">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #EF5350;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Hazard Overlay</div>
+                    <div class="layer-toggle-sub">No-go / Caution Zones</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="hazard">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="poi">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #66BB6A;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Science POI</div>
+                    <div class="layer-toggle-sub">Points of Interest</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="poi">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="layer-toggle" data-layer="rover-tracks">
+                <div class="layer-toggle-info">
+                  <span class="layer-color-dot" style="background: #78909C;"></span>
+                  <div>
+                    <div class="layer-toggle-label">Rover Tracks</div>
+                    <div class="layer-toggle-sub">Curiosity Traverse</div>
+                  </div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" data-layer-id="rover-tracks">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <div class="panel-section-title">Layer Opacity</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 10px; color: var(--color-text-muted);">0%</span>
+              <input type="range" min="0" max="100" value="80" id="layer-opacity-slider"
+                style="flex: 1; accent-color: var(--color-accent);">
+              <span style="font-size: 10px; color: var(--color-text-muted);">100%</span>
+              <span
+                style="font-family: var(--font-heading); font-size: 10px; color: var(--color-accent); width: 30px; text-align: right;"
+                id="layer-opacity-value">80%</span>
+            </div>
+          </div>
+                  <div class="prov-legend"><b>Data provenance</b><br>
+            <span class="prov-badge" style="--pc:#00E676">MEASURED</span> NASA instrument data (tiles / papers)<br>
+            <span class="prov-badge" style="--pc:#40C4FF">DERIVED</span> computed from a real DEM<br>
+            <span class="prov-badge" style="--pc:#FFD600">INTERPRETED</span> human-annotated zones<br>
+            <span class="prov-badge" style="--pc:#FF9100">SIMULATED</span> placeholder model - not NASA data<br>
+            <span class="prov-badge" style="--pc:#9E9E9E">PLACEHOLDER</span> no source wired in yet</div>
+        </div>
+
+        <!-- ======== ROUTE PANEL ======== -->
+        <div class="panel-content" id="panel-route" role="tabpanel" aria-labelledby="tab-route">
+          <!-- Route Controls -->
+          <div class="panel-section">
+            <div class="panel-section-title">Route Planning</div>
+            <div class="route-controls">
+              <button class="route-btn primary" id="btn-add-waypoint" title="Click on map to add a waypoint">
+                <i class="fa-solid fa-plus"></i> ADD WP
+              </button>
+              <button class="route-btn" id="btn-auto-route" title="Auto-generate optimal route">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> AUTO
+              </button>
+              <button class="route-btn" id="btn-clear-route" title="Clear all waypoints">
+                <i class="fa-solid fa-trash-can"></i> CLEAR
+              </button>
+            </div>
+          </div>
+
+          <!-- Route Stats -->
+          <div class="panel-section">
+            <div class="panel-section-title">Route Summary</div>
+            <div class="metric-grid">
+              <div class="metric-card">
+                <div class="metric-label">Distance</div>
+                <div class="metric-value small info" id="route-total-distance">2.47 <span class="metric-unit">km</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Est. Time</div>
+                <div class="metric-value small" id="route-est-time">1:34 <span class="metric-unit">hrs</span></div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Elevation Δ</div>
+                <div class="metric-value small warning" id="route-elev-delta">+148 <span class="metric-unit">m</span>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-label">Waypoints</div>
+                <div class="metric-value small" id="route-wp-count">5</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Waypoint List -->
+          <div class="panel-section">
+            <div class="panel-section-title">Waypoints</div>
+            <div id="waypoint-list" style="display: flex; flex-direction: column; gap: 6px;">
+              <div class="waypoint-item active" data-waypoint="wp-1">
+                <div class="waypoint-marker">A</div>
+                <div class="waypoint-details">
+                  <div class="waypoint-name">HAB Airlock</div>
+                  <div class="waypoint-coords">-5.4653° / 137.4049°</div>
+                </div>
+                <div class="waypoint-distance">START</div>
+                <div class="waypoint-actions">
+                  <button title="Edit waypoint"><i class="fa-solid fa-pen"></i></button>
+                  <button title="Remove waypoint"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+
+              <div class="waypoint-item" data-waypoint="wp-2">
+                <div class="waypoint-marker">B</div>
+                <div class="waypoint-details">
+                  <div class="waypoint-name">Sedimentary Outcrop α</div>
+                  <div class="waypoint-coords">-5.4712° / 137.4123°</div>
+                </div>
+                <div class="waypoint-distance">0.62 km</div>
+                <div class="waypoint-actions">
+                  <button title="Edit waypoint"><i class="fa-solid fa-pen"></i></button>
+                  <button title="Remove waypoint"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+
+              <div class="waypoint-item" data-waypoint="wp-3">
+                <div class="waypoint-marker">C</div>
+                <div class="waypoint-details">
+                  <div class="waypoint-name">Sulfate Ridge</div>
+                  <div class="waypoint-coords">-5.4781° / 137.4198°</div>
+                </div>
+                <div class="waypoint-distance">1.15 km</div>
+                <div class="waypoint-actions">
+                  <button title="Edit waypoint"><i class="fa-solid fa-pen"></i></button>
+                  <button title="Remove waypoint"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+
+              <div class="waypoint-item" data-waypoint="wp-4">
+                <div class="waypoint-marker">D</div>
+                <div class="waypoint-details">
+                  <div class="waypoint-name">Sensor Deploy Site E-7</div>
+                  <div class="waypoint-coords">-5.4830° / 137.4255°</div>
+                </div>
+                <div class="waypoint-distance">1.78 km</div>
+                <div class="waypoint-actions">
+                  <button title="Edit waypoint"><i class="fa-solid fa-pen"></i></button>
+                  <button title="Remove waypoint"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+
+              <div class="waypoint-item" data-waypoint="wp-5">
+                <div class="waypoint-marker">E</div>
+                <div class="waypoint-details">
+                  <div class="waypoint-name">Return — HAB Airlock</div>
+                  <div class="waypoint-coords">-5.4653° / 137.4049°</div>
+                </div>
+                <div class="waypoint-distance">2.47 km</div>
+                <div class="waypoint-actions">
+                  <button title="Edit waypoint"><i class="fa-solid fa-pen"></i></button>
+                  <button title="Remove waypoint"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Elevation Profile -->
+          <div class="panel-section">
+            <div class="panel-section-title">Elevation Profile</div>
+            <div class="elevation-profile-container">
+              <canvas id="elevation-profile-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======== SCIENCE PANEL ======== -->
+        <div class="panel-content" id="panel-science" role="tabpanel" aria-labelledby="tab-science">
+          <!-- Science Targets -->
+          <div class="panel-section">
+            <div class="panel-section-title">Science Targets</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;" id="science-targets-list">
+              <div class="science-target" data-target="tgt-1">
+                <div class="science-target-header">
+                  <span class="science-target-name"><i class="fa-solid fa-mountain-sun text-accent"
+                      style="margin-right:6px;"></i>Vera Rubin Ridge</span>
+                  <span class="science-tag">GEOLOGY</span>
+                </div>
+                <div class="science-target-desc">Hematite-bearing sedimentary formation. Priority for spectral analysis
+                  and cross-section sampling.</div>
+              </div>
+
+              <div class="science-target" data-target="tgt-2">
+                <div class="science-target-header">
+                  <span class="science-target-name"><i class="fa-solid fa-droplet text-info"
+                      style="margin-right:6px;"></i>Paleolake Clay Deposit</span>
+                  <span class="science-tag">ASTROBIO</span>
+                </div>
+                <div class="science-target-desc">Phyllosilicate-rich unit indicative of past aqueous environment.
+                  High-priority biosignature search.</div>
+              </div>
+
+              <div class="science-target" data-target="tgt-3">
+                <div class="science-target-header">
+                  <span class="science-target-name"><i class="fa-solid fa-gem text-warning"
+                      style="margin-right:6px;"></i>Sulfate Transition Zone</span>
+                  <span class="science-tag">MINERALOGY</span>
+                </div>
+                <div class="science-target-desc">Sharp mineralogical boundary between clay and sulfate units. Key for
+                  understanding climate transition.</div>
+              </div>
+
+              <div class="science-target" data-target="tgt-4">
+                <div class="science-target-header">
+                  <span class="science-target-name"><i class="fa-solid fa-wind"
+                      style="margin-right:6px; color: #78909C;"></i>Aeolian Dune Field</span>
+                  <span class="science-tag">ATMOSPHERE</span>
+                </div>
+                <div class="science-target-desc">Active barchan dunes for aeolian transport study. Wind sensor
+                  deployment recommended.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sample Collection Log -->
+          <div class="panel-section">
+            <div class="panel-section-title">Sample Collection Log</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;" id="sample-log">
+              <div class="sample-entry" data-sample="GC-001">
+                <div class="sample-icon"><i class="fa-solid fa-vial"></i></div>
+                <div class="sample-info">
+                  <div class="sample-id">GC-001</div>
+                  <div class="sample-type">Regolith — surface scrape</div>
+                </div>
+                <span style="font-size: 10px; color: var(--color-success);">✓ Stored</span>
+              </div>
+              <div class="sample-entry" data-sample="GC-002">
+                <div class="sample-icon"><i class="fa-solid fa-gem"></i></div>
+                <div class="sample-info">
+                  <div class="sample-id">GC-002</div>
+                  <div class="sample-type">Rock core — sedimentary</div>
+                </div>
+                <span style="font-size: 10px; color: var(--color-success);">✓ Stored</span>
+              </div>
+              <div class="sample-entry" data-sample="GC-003">
+                <div class="sample-icon"><i class="fa-solid fa-flask-vial"></i></div>
+                <div class="sample-info">
+                  <div class="sample-id">GC-003</div>
+                  <div class="sample-type">Atmospheric gas capture</div>
+                </div>
+                <span style="font-size: 10px; color: var(--color-warning);">⏳ Pending</span>
+              </div>
+            </div>
+            <button class="route-btn" style="margin-top: 10px; width: 100%;" id="btn-add-sample">
+              <i class="fa-solid fa-plus"></i> LOG NEW SAMPLE
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Left Sidebar Toggle -->
+      <button id="left-sidebar-toggle" class="sidebar-toggle" title="Toggle left sidebar"
+        aria-label="Toggle left sidebar">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+
+      <!-- ==========================================================
+           MAP CONTAINER
+           ========================================================== -->
+      <section id="map-container" aria-label="Mars map">
+        <!-- Map Toolbar -->
+        <div class="map-toolbar">
+          <button class="map-tool-btn" id="tool-pan" title="Pan" data-tool="pan"><i
+              class="fa-solid fa-hand"></i></button>
+          <button class="map-tool-btn active" id="tool-select" title="Select" data-tool="select"><i
+              class="fa-solid fa-arrow-pointer"></i></button>
+          <button class="map-tool-btn" id="tool-measure" title="Measure Distance" data-tool="measure"><i
+              class="fa-solid fa-ruler"></i></button>
+          <button class="map-tool-btn" id="tool-area" title="Measure Area" data-tool="area"><i
+              class="fa-solid fa-draw-polygon"></i></button>
+          <button class="map-tool-btn" id="tool-pin" title="Drop Pin" data-tool="pin"><i
+              class="fa-solid fa-map-pin"></i></button>
+          <button class="map-tool-btn" id="tool-screenshot" title="Capture View" data-tool="screenshot"><i
+              class="fa-solid fa-camera"></i></button>
+        </div>
+
+        <!-- Leaflet Map -->
+        <div id="mars-map"></div>
+
+        <!-- Coordinate Display -->
+        <div class="map-coords-display" id="map-coords-display">
+          <span>
+            <span class="coord-label">LAT</span>
+            <span class="coord-value" id="cursor-lat">-5.4653°</span>
+          </span>
+          <span>
+            <span class="coord-label">LON</span>
+            <span class="coord-value" id="cursor-lon">137.4049°</span>
+          </span>
+          <span>
+            <span class="coord-label">ELEV</span>
+            <span class="coord-value" id="cursor-elev">-4,501 m</span>
+          </span>
+        </div>
+
+        <!-- Mini Map -->
+        <div class="mini-map-container" id="mini-map-container">
+          <div class="mini-map-header">OVERVIEW</div>
+          <div id="mini-map"></div>
+        </div>
+      </section>
+
+      <!-- Right Panel Toggle -->
+      <button id="right-panel-toggle" class="sidebar-toggle" title="Toggle right panel" aria-label="Toggle right panel"
+        style="border-radius: 4px 0 0 4px; border-right: none; border-left: 1px solid var(--color-border);">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+
+      <!-- ==========================================================
+           RIGHT INFO PANEL
+           ========================================================== -->
+      <aside id="right-panel" role="complementary" aria-label="Information panel">
+
+        <!-- Location Details -->
+        <section class="right-panel-section">
+          <div class="right-panel-title"><i class="fa-solid fa-location-crosshairs"></i> LOCATION DETAILS</div>
+          <div class="terrain-info-list" id="location-details">
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Coordinates</span>
+              <span class="terrain-info-val text-info" id="loc-coords">-5.4653°, 137.4049°</span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Region</span>
+              <span class="terrain-info-val" id="loc-region">Aeolis Palus</span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Quad Map</span>
+              <span class="terrain-info-val" id="loc-quad">MC-23 Aeolis</span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Distance to HAB</span>
+              <span class="terrain-info-val text-info" id="loc-hab-dist">0.00 km</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Elevation Profile -->
+        <section class="right-panel-section">
+          <div class="right-panel-title"><i class="fa-solid fa-chart-area"></i> ELEVATION PROFILE</div>
+          <div class="right-chart-container">
+            <canvas id="right-elevation-chart"></canvas>
+          </div>
+        </section>
+
+        <!-- Weather Dashboard -->
+        <section class="right-panel-section">
+          <div class="right-panel-title"><i class="fa-solid fa-cloud-sun"></i> WEATHER — SOL 1</div>
+          <div class="metric-grid" id="weather-dashboard">
+            <div class="metric-card">
+              <div class="metric-label">Temp</div>
+              <div class="metric-value info" data-metric="temperature">-63<span class="metric-unit">°C</span></div>
+              <div class="metric-trend down">▼ -2°</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Pressure</div>
+              <div class="metric-value" data-metric="pressure">636<span class="metric-unit"> Pa</span></div>
+              <div class="metric-trend stable">— stable</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Wind</div>
+              <div class="metric-value" data-metric="wind-speed">7.2<span class="metric-unit"> m/s</span></div>
+              <div class="metric-trend up">▲ NNW</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">UV Index</div>
+              <div class="metric-value warning" data-metric="uv-index">HIGH</div>
+              <div class="metric-trend" style="color: var(--color-warning);">⚠ Limit EVA</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Radiation Monitor -->
+        <section class="right-panel-section">
+          <div class="right-panel-title"><i class="fa-solid fa-radiation"></i> RADIATION MONITOR</div>
+          <div class="metric-grid" id="radiation-monitor">
+            <div class="metric-card wide">
+              <div class="metric-label">Dose Rate</div>
+              <div class="metric-value success" data-metric="radiation-dose">0.67 <span
+                  class="metric-unit">mSv/day</span></div>
+            </div>
+          </div>
+          <div class="radiation-bar-container">
+            <div class="radiation-bar-bg">
+              <div class="radiation-bar-fill" id="radiation-bar" style="width: 28%;" data-value="0.67"></div>
+            </div>
+            <div class="radiation-labels">
+              <span>NOMINAL</span>
+              <span>ELEVATED</span>
+              <span>CRITICAL</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Terrain Analysis -->
+        <section class="right-panel-section">
+          <div class="right-panel-title"><i class="fa-solid fa-mountain"></i> TERRAIN ANALYSIS</div>
+          <div class="terrain-info-list" id="terrain-analysis">
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Slope Angle</span>
+              <span class="terrain-info-val text-success" data-metric="slope-angle">4.2°</span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Rock Abundance</span>
+              <span class="terrain-info-val" data-metric="rock-abundance">12%</span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Soil Type</span>
+              <span class="terrain-info-val" data-metric="soil-type">Basaltic Regolith</span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Thermal Inertia</span>
+              <span class="terrain-info-val" data-metric="thermal-inertia">285 <span class="metric-unit">J m⁻² K⁻¹
+                  s⁻¹⁄²</span></span>
+            </div>
+            <div class="terrain-info-row">
+              <span class="terrain-info-key">Traversability</span>
+              <span class="terrain-info-val text-success" data-metric="traversability">GOOD</span>
+            </div>
+          </div>
+        </section>
+
+      </aside>
+
+    </main>
+
+    <!-- ============================================================
+         BOTTOM STATUS BAR
+         ============================================================ -->
+    <footer id="status-bar" role="contentinfo" aria-label="Status bar">
+      <div class="status-bar-group">
+        <div class="status-bar-item" title="Current GPS Coordinates">
+          <i class="fa-solid fa-location-dot text-accent"></i>
+          <span>GPS</span>
+          <span class="status-bar-value" id="sb-gps">-5.4653° / 137.4049°</span>
+        </div>
+        <div class="status-bar-item" title="Current Elevation">
+          <i class="fa-solid fa-arrow-up-from-ground-water text-info"></i>
+          <span>ELEV</span>
+          <span class="status-bar-value" id="sb-elevation">-4,501 m</span>
+        </div>
+        <div class="status-bar-item" title="Distance Traveled / Remaining">
+          <i class="fa-solid fa-shoe-prints"></i>
+          <span>DIST</span>
+          <span class="status-bar-value" id="sb-distance">0.62 / 2.47 km</span>
+        </div>
+      </div>
+      <div class="status-bar-group">
+        <div class="status-bar-item" title="Planned travel time vs. budget">
+          <i class="fa-solid fa-stopwatch text-warning"></i>
+          <span>TRAVEL TIME</span>
+          <span class="status-bar-value" id="sb-eva-time">3:28:00 remaining</span>
+        </div>
+        <div class="status-bar-item" title="Nearby Emergency Shelters">
+          <i class="fa-solid fa-tent-arrows-down text-danger"></i>
+          <span>SHELTERS</span>
+          <span class="status-bar-value" id="sb-shelters">2 within range</span>
+        </div>
+        <div class="status-bar-item" title="Connection Status">
+          <span class="status-dot connected" id="sb-conn-dot"></span>
+          <span>LINK</span>
+          <span class="status-bar-value" id="sb-conn-status">CONNECTED — 14ms</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ============================================================
+         HUD OVERLAY
+         ============================================================ -->
+    <div id="hud-overlay" aria-hidden="true">
+      <div class="hud-visor-frame">
+        <div class="hud-scanlines"></div>
+
+        <!-- Crosshair -->
+        <div class="hud-crosshair"></div>
+
+        <!-- Compass — top center -->
+        <div class="hud-element hud-compass">
+          <div class="hud-compass-strip">
+            <span class="hud-compass-cardinal">W</span>
+            <span class="hud-compass-cardinal">NW</span>
+            <span class="hud-compass-heading" id="hud-heading">N 0°</span>
+            <span class="hud-compass-cardinal">NE</span>
+            <span class="hud-compass-cardinal">E</span>
+          </div>
+          <div class="hud-metric-label">HEADING</div>
+        </div>
+
+        <!-- O2 — top left -->
+        <div class="hud-element hud-o2">
+          <div class="hud-metric">
+            <span class="hud-metric-label">O₂ LEVEL</span>
+            <span class="hud-metric-value" id="hud-o2">87%</span>
+          </div>
+        </div>
+
+        <!-- Battery — top right -->
+        <div class="hud-element hud-battery">
+          <div class="hud-metric">
+            <span class="hud-metric-label">BATTERY</span>
+            <span class="hud-metric-value" id="hud-battery">92%</span>
+          </div>
+        </div>
+
+        <!-- Elevation — left center -->
+        <div class="hud-element hud-elevation">
+          <div class="hud-metric">
+            <span class="hud-metric-label">ELEVATION</span>
+            <span class="hud-metric-value" id="hud-elevation">-4501m</span>
+          </div>
+        </div>
+
+        <!-- Speed — bottom left -->
+        <div class="hud-element hud-speed">
+          <div class="hud-metric">
+            <span class="hud-metric-label">SPEED</span>
+            <span class="hud-metric-value" id="hud-speed">0.0<span style="font-size:12px;"> km/h</span></span>
+          </div>
+        </div>
+
+        <!-- Target Info — right center -->
+        <div class="hud-element hud-target-info">
+          <div class="hud-metric">
+            <span class="hud-metric-label">NEXT WAYPOINT</span>
+            <span class="hud-metric-value" id="hud-next-wp" style="font-size:16px;">WP-B</span>
+            <span class="hud-metric-label" id="hud-wp-dist" style="color: var(--color-info);">0.62 km</span>
+          </div>
+        </div>
+
+        <!-- Warning Banner — bottom center -->
+        <div class="hud-element hud-warning" id="hud-warning">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span id="hud-warning-text">NO WARNINGS</span>
+        </div>
+
+        <!-- HUD Waypoint Markers (dynamically positioned) -->
+        <div id="hud-waypoint-markers">
+          <!-- Populated by hud.js -->
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end #app-container -->
+
+  <!-- ============================================================
+       JAVASCRIPT MODULES
+       ============================================================ -->
+  <script src="js/config.js"></script>
+  <script src="js/mobility.js"></script>
+  <script src="js/resources.js"></script>
+  <script src="js/terrain.js"></script>
+  <script src="js/pathfinding.js"></script>
+  <script src="js/marsMap.js"></script>
+  <script src="js/layers.js"></script>
+  <script src="js/routing.js"></script>
+  <script src="js/science.js"></script>
+  <script src="js/weather.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+
+</html>

@@ -32,7 +32,18 @@ only changes speed, slope limits and the time budget.
 - Strong orbital coverage (MOLA, HRSC, THEMIS, Viking, CRISM) and a well-documented rover traverse.
 
 ## Screenshots
-*(add 3–4 images here: layered map · route comparison · mission report · HUD view)*
+
+### Layered Map
+![Layered Map](screenshots/layered-map.png)
+
+### Route Comparison
+![Route Comparison](screenshots/route-comparison.png)
+
+### Mission Report
+![Mission Report](screenshots/mission-report.png)
+
+### HUD View
+![HUD View](screenshots/hud-view.png)
 
 ## What it does
 | Feature | How it works |

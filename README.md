@@ -2,10 +2,10 @@
 
 **NASA Space Apps Challenge 2026 · Challenge: MarsPath: Route Planning for Crewed Mars Exploration**
 
-**Team:** Space Express 
-**Live demo:** https://kamalakshdessai-star.github.io/MarsPath_v2_SOE/ 
-**Slides:** https://docs.google.com/presentation/d/19d1Rrc5scahmCS-IiDDeOk_fBUQqL7T3/edit?usp=sharing&ouid=103336403847445405364&rtpof=true&sd=true 
-**Working video:**
+**Team:** Space Express . 
+**Live demo:** https://kamalakshdessai-star.github.io/MarsPath_v2_SOE/ .
+**Slides:** https://docs.google.com/presentation/d/19d1Rrc5scahmCS-IiDDeOk_fBUQqL7T3/edit?usp=sharing&ouid=103336403847445405364&rtpof=true&sd=true . 
+**Working video:** .
 
 MarsPath is an interactive mission-planning map for a hypothetical crew exploring the
 north-west foothills of Aeolis Mons (Mount Sharp) in **Gale Crater** — on foot during a suited EVA, or by a
